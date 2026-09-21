@@ -74,7 +74,7 @@ question is not covered in the corpus.
           sentence cut in half at either end."
        - "No chunk is shorter than 200 characters, since anything below that
           in my corpus turned out to be a heading with no content under it." -->
-The chunker should return one relevant line from the documentation, with one
+The chunker should return one line from the documentation, with one
 sentence of overlap before and after each chunk.
 
 
@@ -83,7 +83,7 @@ sentence of overlap before and after each chunk.
 Judging by how info is formatted in the corpus, one relevent line of text
 should provide enough information to answer a question without getting
 out of context, with the overlap allowing for possibly some more relevant
-context.
+context and to prevent incomplete thoughts.
 
 
 ---

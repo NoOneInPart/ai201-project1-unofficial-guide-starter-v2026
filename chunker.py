@@ -22,10 +22,17 @@ to it, write down what you saw, and move on. That's a real observation about
 your pipeline, not giving up.
 """
 
+import re
 from dataclasses import dataclass
 
 import config
 from ingest import Document
+
+
+def _get_sentences(text: str) -> list[str]:
+    """Split a string into sentences based on terminal punctuation (. ! ?)."""
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [s.strip() for s in sentences if s.strip()]
 
 
 @dataclass
@@ -82,22 +89,45 @@ def fallback_split(
 
 def split_documents(documents: list[Document]) -> list[Chunk]:
     """
-    Split documents into chunks. ⚠️ REPLACE THE BODY OF THIS IN MILESTONE 3.
+    Split documents into chunks.
 
-    Right now it just calls the fallback. That is the plain, generic behaviour
-    the brief is talking about.
-
-    When you write your own strategy, set `produced_by` to
-    "chunker.py::split_documents" so your README's Sample Chunks section names
-    the right function. `app.py chunks` prints that string for you.
-
-    Things worth thinking about before you write any code:
-      - Are your documents short posts or long guides?
-      - Is the useful information in one sentence, or spread over a paragraph?
-      - Would splitting on paragraph breaks keep more thoughts intact than
-        splitting on a character count?
+    Returns each non-empty line from the document with one sentence before and
+    after each line for overlap when available.
     """
-    return fallback_split(documents)
+    chunks: list[Chunk] = []
+
+    for doc in documents:
+        lines = [line.strip() for line in doc.text.splitlines() if line.strip()]
+        for i, line in enumerate(lines):
+            parts: list[str] = []
+
+            # One sentence before from the previous line when available
+            if i > 0:
+                prev_sentences = _get_sentences(lines[i - 1])
+                if prev_sentences:
+                    parts.append(prev_sentences[-1])
+
+            # The current line
+            parts.append(line)
+
+            # One sentence after from the next line when available
+            if i < len(lines) - 1:
+                next_sentences = _get_sentences(lines[i + 1])
+                if next_sentences:
+                    parts.append(next_sentences[0])
+
+            chunk_text = "\n".join(parts)
+            if chunk_text.strip():
+                chunks.append(
+                    Chunk(
+                        text=chunk_text,
+                        source=doc.source,
+                        index=i,
+                        produced_by="chunker.py::split_documents",
+                    )
+                )
+
+    return chunks
 
 
 def describe(chunks: list[Chunk]) -> str:
