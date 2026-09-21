@@ -25,6 +25,9 @@ contains the answer.
 **Why this target:**
 <!-- e.g. "One of my questions is about a topic only two documents mention, so
      I expect that one to be hard." -->
+The questions are pulled directly from the corpus and aren't too hard, so
+getting 4 out of 5 right means the project is heading in the right direction
+and may simply need more tuning.
 
 ---
 
@@ -35,6 +38,7 @@ Every answer the system produces names at least one source document.
 **Why this target:**
 <!-- Why all five and not four? What about your setup makes that achievable —
      or what would have to go wrong for it not to be? -->
+The system must not try and invent information, everything must be sourced.
 
 ---
 
@@ -52,6 +56,8 @@ in at least 4 of 5 tries.
 **Why this target:**
 <!-- What did your distances look like when you set the cutoff in Milestone 4?
      Was there a clean gap, or did the two groups overlap? -->
+This prevents the system from returning irrelevant information if the requested
+question is not covered in the corpus.
 
 ---
 
@@ -68,11 +74,16 @@ in at least 4 of 5 tries.
           sentence cut in half at either end."
        - "No chunk is shorter than 200 characters, since anything below that
           in my corpus turned out to be a heading with no content under it." -->
+The chunker should return one relevant line from the documentation, with one
+sentence of overlap before and after each chunk.
 
 
 
 **Why this target:**
-
+Judging by how info is formatted in the corpus, one relevent line of text
+should provide enough information to answer a question without getting
+out of context, with the overlap allowing for possibly some more relevant
+context.
 
 
 ---
@@ -86,10 +97,14 @@ in at least 4 of 5 tries.
      handles badly, about source attribution being correct rather than merely
      present — anything, as long as it names a number or an observable
      outcome. -->
+The system will only return information provided in the corpus and does not
+attempt to provide its own interpretation of the information or add on to it.
 
 
 
 **Why this target:**
+Allowing the system to add to the information runs the risk of it providing
+incorrect, hallucinated information.
 
 
 
