@@ -26,6 +26,14 @@
      this repo.
 
      Milestone 5. -->
+Given a corpus in `\corpora`, the below tests use the `campus_life` corpus, 
+this system will split each document in the corpus into chunks by line, with
+one sentence of overlap before and after, and index them. An embedding model
+vectorizes each chunk, and for a given question, the system determines which
+chunks are the most relevant by vector distance. The question, along with the
+top-k (5) chunks from the corpus that pass below the distance threshold of 0.6,
+are passed to an LLM to synthesize an answer from the provided information if
+the question can reasonably be answered using the chunks from the corpus.
 
 ## Chunking Strategy
 
@@ -87,7 +95,7 @@ I'm a junior and I've done this twice now. Wait times: up to 30 minutes on Frida
 Hours are 11:00am to 1:00am daily during term.
 ```
 
-**Chunk 5** — source: housing_morrow_house.txt#2` — produced by: `chunker.py::split_documents`
+**Chunk 5** — source: `housing_morrow_house.txt#2` — produced by: `chunker.py::split_documents`
 
 ```
 Rooms are singles and doubles, hall bathrooms.
@@ -100,14 +108,33 @@ The bad: known damp problem on the ground floor; two rooms were taken offline in
 <!-- One complete question and answer, pasted as text, with the source line
      visible. Milestone 4. -->
 
-**Question:**
+**Question:** "What is the dining atrium like?"
 
 **Answer:**
 
 ```
+  (best distance 0.453, cutoff 0.6)
+
+Based on the provided documents, there is no queue if you go before 11:45 to eat between classes, but the food is picked clean by 1:15 and not restocked until the next morning (*dining_the_atrium_followup.txt*).
+
+Sources retrieved: dining_pellew_dining_hall.txt, dining_the_atrium_followup.txt, housing_calder_annexe.txt, housing_fenwick_court.txt
+
+1 model calls this session, 467 tokens (408 in, 59 out)
 ```
 
-**My relevance cutoff:**
+**My relevance cutoff:** 0.6
+Based on my testing, my most abstract question from the corpus about the dining
+atrium correctly retrieved student reviews about the Atrium at a distance of
+0.5196, but also pulled less relevant sources about housing at a distance of
+0.5129. The lowest distance of an out-of-corpus question was way
+higher at 0.7903 when asking it about the capital of Mongolia. Thus, I decided
+that the default cutoff of 0.6 worked for my setup as it ensures slightly more
+difficult questions can be answered from the corpus while still easily 
+filtering out sources for irrelevant questions.
+Note: the best distance for the Atrium question returned 0.453, but checking
+retrieve revealed that corresponding source to be about Pellew Dining Hall.
+The most relevant source about the Atrium was the last one that appeared at a
+distance of 0.5196 when analyzing the assembled prompt.
 
 <!-- The number you set in config.py, and how you got there.
 
@@ -120,7 +147,16 @@ The bad: known damp problem on the ground floor; two rooms were taken offline in
 
 | Question | In corpus? | Best distance |
 |---|---|---|
-|  |  |  |
+| How do grade appeals work? | Yes | 0.2385 |
+| What's the difference between withdrawal and dropping? | Yes | 0.3034 |
+| What is the workload for CS 210? | Yes | 0.3092 |
+| What is the dining atrium like? | Yes | 0.4531 |
+| Where do I get textbooks? | Yes | 0.3262 |
+| What is the capital of Mongolia? | No | 0.7903 |
+| How do I change the oil in a diesel engine? | No | 0.8677 |
+| Who won the 1994 World Cup? | No | 0.8270 |
+| What is the recommended dosage of ibuprofen for a headache? | No | 0.7985 |
+| How do I write a for loop in Rust? | No | 0.8312 |
 
 ## How I Used AI
 
@@ -133,9 +169,17 @@ The bad: known damp problem on the ground floor; two rooms were taken offline in
 
      Milestone 5. -->
 
-**1.**
+**1.** I asked Gemini to write a new chunking function based on a simple
+explanation of wanting it done by line with one sentence of overlap, but I had
+the effort set to High and it went on a wild goose chase of trying to learn
+everything about the repository. I stopped it in its tracks, turned the effort
+down to Medium, and asked it again, but more explicitly about how I just want
+a chunker that returns each line of the corpus, with an extra sentence from the
+lines before and after when available to ensure there are no incomplete
+thoughts in the chunk, and it finally got it done quickly.
 
-**2.**
+**2.** The above was my only use of AI in Unit 1. I may ask it for help
+revising my criteria in Unit 2 since all of them managed to pass.
 
 <!-- ── Stretch features ─────────────────────────────────────────────────────
      Doing one? Say so here BEFORE you start. A feature this README never

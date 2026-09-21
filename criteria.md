@@ -57,7 +57,11 @@ in at least 4 of 5 tries.
 <!-- What did your distances look like when you set the cutoff in Milestone 4?
      Was there a clean gap, or did the two groups overlap? -->
 This prevents the system from returning irrelevant information if the requested
-question is not covered in the corpus.
+question is not covered in the corpus. Allowing 1 miss for every 5 tries
+provides some tuning leeway to either answer more questions at the expense of
+possibly using the wrong sources, or only allowing it to answer questions it is
+completely confident in, even if it might have been able to answer a question
+based on info in the corpus that was not presented in a straightforward manner.
 
 ---
 
@@ -98,13 +102,16 @@ context and to prevent incomplete thoughts.
      present — anything, as long as it names a number or an observable
      outcome. -->
 The system will only return information provided in the corpus and does not
-attempt to provide its own interpretation of the information or add on to it.
-
+attempt to provide its own interpretation of the information or add on to it
+for at least 4 out of 5 tries.
 
 
 **Why this target:**
 Allowing the system to add to the information runs the risk of it providing
-incorrect, hallucinated information.
+incorrect, hallucinated information. Allowing it to get 1 question out of 5
+wrong allows the system to be able to answer some slightly more abstract
+questions while ensuring it won't make up an answer for a question that is
+completely out of the context of the corpus.
 
 
 
