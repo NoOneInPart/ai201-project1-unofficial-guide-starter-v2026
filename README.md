@@ -29,8 +29,13 @@
 
 ## Chunking Strategy
 
-**Chunk size:**
-**Overlap:**
+**Chunk size:** 1 line of text
+**Overlap:** 1 sentence before and after each line
+
+Judging based on how the corpus is formatted, one line should provide plenty
+of context to answer a specific question, and adding a sentence of overlap
+before and after prevents broken, incomplete thoughts while adding additional
+provided information from the same source that may be prescient.
 
 <!-- What about YOUR documents made you pick these numbers? Short posts and
      long sectioned guides don't want the same chunking, and "800 seemed
@@ -53,29 +58,41 @@
 
      Milestone 3. -->
 
-**Chunk 1** — source: `` — produced by: ``
+**Chunk 1** — source: `admin_add_drop_deadline.txt#0` — produced by: `chunker.py::split_documents`
 
 ```
+On the add/drop deadline
+You can add a course through the end of the second week.
 ```
 
-**Chunk 2** — source: `` — produced by: ``
+**Chunk 2** — source: `course_cs_210_workload.txt#2` — produced by: `chunker.py::split_documents`
 
 ```
+That's real time, not optimistic time.
+It's front-loaded — the first month is heavier than the rest, partly because you're learning the format.
 ```
 
-**Chunk 3** — source: `` — produced by: ``
+**Chunk 3** — source: `course_phys_130.txt#3` — produced by: `chunker.py::split_documents`
 
 ```
+Expect 7 hours a week, plus 3 on lab weeks.
+The one piece of advice: the lab practical is worth 20% and almost nobody prepares for it.
 ```
 
-**Chunk 4** — source: `` — produced by: ``
+**Chunk 4** — source: `dining_verrill_street_grill.txt#1` — produced by: `chunker.py::split_documents`
 
 ```
+Verrill Street Grill
+I'm a junior and I've done this twice now. Wait times: up to 30 minutes on Friday evenings, otherwise under 10. The thing worth going for is the burger, which is the only late-night hot food on campus. The thing to know is that one register, so the queue is a single line no matter how busy.
+Hours are 11:00am to 1:00am daily during term.
 ```
 
-**Chunk 5** — source: `` — produced by: ``
+**Chunk 5** — source: housing_morrow_house.txt#2` — produced by: `chunker.py::split_documents`
 
 ```
+Rooms are singles and doubles, hall bathrooms.
+The good: cheapest housing tier by about $900 a year, and the singles are real singles.
+The bad: known damp problem on the ground floor; two rooms were taken offline in 2024.
 ```
 
 ## Sample Answer
