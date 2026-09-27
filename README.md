@@ -178,8 +178,12 @@ a chunker that returns each line of the corpus, with an extra sentence from the
 lines before and after when available to ensure there are no incomplete
 thoughts in the chunk, and it finally got it done quickly.
 
-**2.** The above was my only use of AI in Unit 1. I may ask it for help
-revising my criteria in Unit 2 since all of them managed to pass.
+**2.** In Unit 2, I asked Gemini to fill in the run logs in this README for me 
+as I trusted it more to fill them in correctly without error based on the logs 
+in /results compared to me doing it manually. I had discussions about the 
+criteria in the chat context so I knew that it had an understanding of the 
+criteria that aligned with how I viewed them. I checked the results and they 
+matched up. I filled out the reasoning parts myself though.
 
 <!-- ── Stretch features ─────────────────────────────────────────────────────
      Doing one? Say so here BEFORE you start. A feature this README never
@@ -429,6 +433,14 @@ with the same questions.
      not.
 
      Milestone 5. -->
+As far as I am aware, criteria-wise the current system passes all 5 and manages 
+to successfully answer all posed questions and reject all invalid out-of-corpus 
+questions. However, I do find it strange that the first run with the original 
+line-based chunker implementation managed to answer the question about dining 
+at The Atrium back in Unit 1, but stopped working once I returned to work on 
+Unit 2 without me seemingly changing any relevant code, only the scoring 
+function used for run_eval.py. If I had the time, this is a curiousity that I 
+think is worth investigation.
 
 ## What I'd Do Differently
 
@@ -436,3 +448,7 @@ with the same questions.
      differently, and why?
 
      Milestone 5. -->
+I would probably rewrite criteria 4 to be even more specific. Not only must the 
+chunker return complete thoughts, it must not return irrelevant information, 
+such as chunks for header and title lines. I would probably think of a better 
+way to word it that is more measureable though.
