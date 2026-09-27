@@ -40,6 +40,11 @@ Every answer the system produces names at least one source document.
      or what would have to go wrong for it not to be? -->
 The system must not try and invent information, everything must be sourced.
 
+**Revised in Unit 2:** 
+Since source attribution is required by the system prompt, 5 out of 5 is an
+achievable score and any less than 5 would mean that the model failed to follow
+the prompt and hallucinated information.
+
 ---
 
 ## 3. The relevance gate stops out-of-corpus questions
@@ -81,7 +86,15 @@ based on info in the corpus that was not presented in a straightforward manner.
 The chunker should return one line from the documentation, with one
 sentence of overlap before and after each chunk.
 
+**Revised in unit 2:** 
+For at least 4 of 5 test questions, every retrieved chunk reads as a complete 
+thought, with no sentences cut off mid-sentence at either chunk boundary.
 
+**Why revised:** 
+The original stated the implementation mechanism in chunker.py rather than a 
+measurable acceptance threshold. The revised version tests the actual intended 
+outcome of sentence overlap (sentence boundary integrity) as a measurable 
+pass/fail rate across retrieved chunks.
 
 **Why this target:**
 Judging by how info is formatted in the corpus, one relevent line of text
@@ -105,6 +118,18 @@ The system will only return information provided in the corpus and does not
 attempt to provide its own interpretation of the information or add on to it
 for at least 4 out of 5 tries.
 
+**Revised in unit 2:** 
+For all 5 of 5 test questions across all runs, the system produces a correct, 
+substantive answer matching the expected information (verified by scorer.py::judge), 
+without refusing due to missing information.
+
+**Why revised:** 
+"Does not attempt to provide its own interpretation" is too subjective to 
+evaluate consistently across runs. However, measuring the correctness of the
+answer using scorer.py allows it to be objectively measured with a judging
+implementation that checks if the expected text is in the generated answer
+on top of using rapidfuzz to do fuzzy matching if there are minor differences
+in wording.
 
 **Why this target:**
 Allowing the system to add to the information runs the risk of it providing
@@ -112,6 +137,11 @@ incorrect, hallucinated information. Allowing it to get 1 question out of 5
 wrong allows the system to be able to answer some slightly more abstract
 questions while ensuring it won't make up an answer for a question that is
 completely out of the context of the corpus.
+
+**Revised in unit 2:** 
+Since all test questions are pulled from information available directly in the
+corpus, the model should be able to form a conclusion to all the questions
+that are available in the corpus as well. 
 
 
 
