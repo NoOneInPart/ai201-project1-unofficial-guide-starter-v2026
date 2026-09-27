@@ -288,11 +288,11 @@ revising my criteria in Unit 2 since all of them managed to pass.
 
 | # | Criterion | Verdict | How I decided |
 |---|---|---|---|
-| 1 |  |  |  |
-| 2 |  |  |  |
-| 3 |  |  |  |
-| 4 |  |  |  |
-| 5 |  |  |  |
+| 1 | Retrieved chunk contains the answer | MET | For 4 out of 5 questions on all 3 runs, the retrieved chunks contained the correct answer, which hits the target. |
+| 2 | Every answer names a source | MET | For all 5 questions for all 3 runs, the generated answer correctly cited the source. |
+| 3 | Gate stops out-of-corpus questions | MET | For all 5 out-of-corpus questions, the gate successfully discarded them for being out-of-corpus. |
+| 4 | Retrieved chunks are complete thoughts | MET | For all 5 questions, all chunks returned are full sentences that are not cut off. |
+| 5 | System answers in-corpus test questions correctly | MISSED | For 1 out of 5 questions, the system was unable to answer based on the returned information, which is below the target of 5 of 5. |
 
 ## Diagnoses
 
@@ -331,9 +331,15 @@ the return of the actual chunk that has relevant information.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** I decided to patch the chunker to not return useless chunks 
+for the title line (line 0).
 
-**Why I picked it:**
+**Why I picked it:** This fixes two problems in the criterion 5 diagnosis. The 
+chunker no longer returns a chunk for line 0 if it doesn't contain a sentence 
+punctuation (i.e. if it is only a title), which removes the number of useless 
+chunks filling up the index. This also reduces the amount of useless chunks 
+returned in the retrieval stage, minimizing the issue of the top-k gate not 
+being high enough to allow all relevant chunks to pass through.
 
 <!-- Connect it to a specific diagnosis above in one sentence. If you can't,
      you picked a fix because it sounded impressive. -->
@@ -345,13 +351,67 @@ the return of the actual chunk that has relevant information.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 |  |  |  |  |
-| 2. Every answer names a source | 5 of 5 |  |  |  |  |
-| 3. Gate stops out-of-corpus questions | 4 of 5 |  |  |  |  |
-| 4. | | | | | |
-| 5. | | | | | |
+| 1. Retrieved chunk contains the answer | 4 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 2. Every answer names a source | 5 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 3. Gate stops out-of-corpus questions | 4 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 4. Retrieved chunks are complete thoughts | 4 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 5. System answers in-corpus test questions correctly | 5 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+
+### Real Output by Criterion (After)
+
+#### 1. Retrieved chunk contains the answer
+- **Produced by:** `store.py::search` / `run_eval.py::main`
+- **Result:** 5 of 5 questions had retrieved chunks containing the expected answer across all runs. With title-only stubs removed, `dining_the_atrium_followup.txt` entered the top-5 (rank 4, distance 0.4906) and provided the answer for Question 4 ("What's the dining atrium like?").
+- **Real output example (Question 4, Run 1):**
+  - Best distance: 0.4906 (passed gate)
+  - Sources retrieved: `dining_the_atrium_followup.txt`, `housing_aldridge_hall.txt`, `housing_calder_annexe.txt`, `housing_fenwick_court.txt`, `housing_tamsin_court.txt`
+
+#### 2. Every answer names a source
+- **Produced by:** `generate.py::answer` via `run_eval.py::main`
+- **Result:** 5 of 5 answers across all runs named at least one source document.
+- **Real output example (Question 4, Run 2):**
+  ```
+  Based on the provided documents, the wait time at The Atrium has no queue if you go before 11:45 to eat between classes. However, the food is picked clean by 1:15 and is not restocked again until the next morning. 
+
+  Source: dining_the_atrium_followup.txt
+  ```
+
+#### 3. Gate stops out-of-corpus questions
+- **Produced by:** `run_eval.py::check_out_of_scope` (cutoff: 0.6)
+- **Result:** 5 of 5 out-of-scope questions were refused by the gate in one deterministic pass.
+- **Real output table:**
+
+| Out-of-scope question | Best distance | Gate |
+|---|---|---|
+| What is the capital of Mongolia? | 0.825 | refused |
+| How do I change the oil in a diesel engine? | 0.934 | refused |
+| Who won the 1994 World Cup? | 0.886 | refused |
+| What is the recommended dosage of ibuprofen for a headache? | 0.798 | refused |
+| How do I write a for loop in Rust? | 0.891 | refused |
+
+#### 4. Retrieved chunks are complete thoughts
+- **Produced by:** `chunker.py::split_documents`
+- **Result:** 5 of 5 questions had retrieved chunks that read as complete thoughts. Skipping title lines without sentence-ending punctuation eliminated hollow chunks, increasing the minimum chunk size across the corpus from 31 to 91 characters.
+- **Real output chunk example (`dining_the_atrium_followup.txt#0`):**
+  ```
+  Re: The Atrium
+  Adding to what people have said about The Atrium. The wait figure of no queue matches what I've seen. If you're trying to eat between classes, go before 11:45 and it's a different building entirely.
+  Also worth saying: picked clean by 1:15 and not restocked again until the next morning.
+  ```
+
+#### 5. System answers in-corpus test questions correctly
+- **Produced by:** `generate.py::answer` evaluated by `scorer.py::judge`
+- **Result:** 5 of 5 across all three runs (**MET** against target of 5 of 5). Question 4 now passes the scorer in every run because retrieval successfully supplies the substantive Atrium chunk.
+- **Real output example (Question 4, Run 1 — Pass):**
+  ```
+  According to dining_the_atrium_followup.txt, there is usually no queue if you go before 11:45 to eat between classes. However, it gets picked clean by 1:15 and is not restocked again until the next morning.
+  ```
 
 **Did it help?**
+This change allowed the relevant chunk to rank 4th, below the top-k gate of 5, 
+and allowed the model to successfully answer the question about dining at The
+Atrium. I have not noticed any regressions from this change while re-testing it 
+with the same questions.
 
 <!-- Say plainly whether it did, and how you know. If it made things worse,
      say that — a change that backfired, honestly reported, earns full credit

@@ -98,7 +98,12 @@ def split_documents(documents: list[Document]) -> list[Chunk]:
 
     for doc in documents:
         lines = [line.strip() for line in doc.text.splitlines() if line.strip()]
+        chunk_idx = 0
         for i, line in enumerate(lines):
+            # Skip title line (line 0) if there are subsequent lines and it has no sentence-ending punctuation
+            if i == 0 and len(lines) > 1 and not any(p in line for p in [".", "!", "?"]):
+                continue
+
             parts: list[str] = []
 
             # One sentence before from the previous line when available
@@ -122,10 +127,11 @@ def split_documents(documents: list[Document]) -> list[Chunk]:
                     Chunk(
                         text=chunk_text,
                         source=doc.source,
-                        index=i,
+                        index=chunk_idx,
                         produced_by="chunker.py::split_documents",
                     )
                 )
+                chunk_idx += 1
 
     return chunks
 
