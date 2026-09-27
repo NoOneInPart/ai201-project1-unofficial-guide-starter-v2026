@@ -208,15 +208,72 @@ revising my criteria in Unit 2 since all of them managed to pass.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 |  |  |  |  |
-| 2. Every answer names a source | 5 of 5 |  |  |  |  |
-| 3. Gate stops out-of-corpus questions | 4 of 5 |  |  |  |  |
-| 4. | | | | | |
-| 5. | | | | | |
+| 1. Retrieved chunk contains the answer | 4 of 5 | 4 of 5 | 4 of 5 | 4 of 5 | MET |
+| 2. Every answer names a source | 5 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 3. Gate stops out-of-corpus questions | 4 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 4. Retrieved chunks are complete thoughts | 4 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 5. System answers in-corpus test questions correctly | 5 of 5 | 4 of 5 | 4 of 5 | 4 of 5 | MISSED |
 
 <!-- Underneath, paste the REAL output for each criterion from one of your
      runs — the actual text your system produced, not a description of it.
      Name the file and function that produced it. -->
+
+#### 1. Retrieved chunk contains the answer
+- **Produced by:** `store.py::search` / `run_eval.py::main`
+- **Result:** 4 of 5 questions retrieved a chunk containing the expected answer across all runs. Question 4 ("What's the dining atrium like?") failed because retrieval pulled `dining_the_atrium_followup.txt` instead of `dining_the_atrium.txt`, missing the expected answer ("no queue").
+- **Real output example (Question 1, Run 1):**
+  - Best distance: 0.2385 (passed gate)
+  - Sources retrieved: `admin_grade_appeals.txt`, `admin_housing_lottery.txt`, `course_engl_205_exams.txt`, `course_stat_150_exams.txt`
+  - Relevant retrieved chunk text from `admin_grade_appeals.txt`:
+    ```
+    A grade appeal must start with the instructor and be raised within fifteen days of the grade posting before it can go to the department. Skipping the instructor step will result in the appeal being returned.
+    ```
+
+#### 2. Every answer names a source
+- **Produced by:** `generate.py::answer` via `run_eval.py::main`
+- **Result:** 5 of 5 answers across all runs named at least one source file.
+- **Real output example (Question 1, Run 1):**
+  ```
+  A grade appeal must start with the instructor and be raised within fifteen days of the grade posting before it can go to the department. Skipping the instructor step will result in the appeal being returned. 
+
+  Source: admin_grade_appeals.txt
+  ```
+- **Real output example (Question 3, Run 1):**
+  ```
+  The workload for CS 210 Data Structures is 8 to 10 hours a week outside class, which is real time and front-loaded so the first month is heavier than the rest. (Source: `course_cs_210_workload.txt`)
+  ```
+
+#### 3. Gate stops out-of-corpus questions
+- **Produced by:** `run_eval.py::check_out_of_scope` (cutoff: 0.6)
+- **Result:** 5 of 5 out-of-scope questions were refused by the gate in one deterministic pass.
+- **Real output table:**
+
+| Out-of-scope question | Best distance | Gate |
+|---|---|---|
+| What is the capital of Mongolia? | 0.790 | refused |
+| How do I change the oil in a diesel engine? | 0.868 | refused |
+| Who won the 1994 World Cup? | 0.827 | refused |
+| What is the recommended dosage of ibuprofen for a headache? | 0.798 | refused |
+| How do I write a for loop in Rust? | 0.831 | refused |
+
+#### 4. Retrieved chunks are complete thoughts
+- **Produced by:** `chunker.py::split_documents`
+- **Result:** 5 of 5 questions had retrieved chunks that were complete thoughts, with clean sentence boundaries and no truncation due to sentence-aware chunking and overlap.
+- **Real output chunk example (retrieved for Question 3, from `course_cs_210_workload.txt#2`):**
+  ```
+  That's real time, not optimistic time.
+  It's front-loaded — the first month is heavier than the rest, partly because you're learning the format.
+  ```
+
+#### 5. System answers in-corpus test questions correctly
+- **Produced by:** `generate.py::answer` evaluated by `scorer.py::judge`
+- **Result:** 4 of 5 across all three runs (**MISSED** against target of 5 of 5). Questions 1, 2, 3, and 5 passed the scorer in every run, but Question 4 ("What's the dining atrium like?") failed in all three runs because retrieval missed `dining_the_atrium.txt`, causing the model to return a refusal instead of the expected answer ("no queue").
+- **Real output example (Question 4, Run 1 — Fail):**
+  ```
+  Based on the provided documents, there is not enough information to describe what The Atrium is like, other than someone adding to what others have said about it. 
+
+  Source: dining_the_atrium_followup.txt
+  ```
 
 ## Verdicts
 
