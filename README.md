@@ -314,6 +314,21 @@ revising my criteria in Unit 2 since all of them managed to pass.
 
      Milestone 3. -->
 
+Criterion 5 was missed because, despite working once in Unit 1, in subsequent
+runs the model believed it did not have enough information to answer the 
+question: "What's the dining atrium like?" Analyzing the retrieval stage,
+one chunk from a document was retrieved: a follow-up reply to a student post 
+about The Atrium, however that specific chunk contained nothing but the first
+line of the document, the title, and one sentence from the next line over which 
+provided no useful information:
+```
+Re: The Atrium
+Adding to what people have said about The Atrium.
+```
+There are two problems here, the chunker returns useless chunks containing just
+the title line and one sentence of overlap, and the top-k gate (5) prevents 
+the return of the actual chunk that has relevant information.
+
 ## The Improvement
 
 **What I changed:**
