@@ -183,6 +183,7 @@ def ask_pipeline(
     threshold=None,
     on_gate=None,
     on_prompt=None,
+    cache=True,
 ):
     """Retrieve, gate, answer. Returns the outcome and prints nothing.
 
@@ -231,7 +232,7 @@ def ask_pipeline(
         on_prompt(prompt)
 
     outcome["prompt"] = prompt
-    outcome["answer"] = answer_from_chunks(question, results)
+    outcome["answer"] = answer_from_chunks(question, results, cache=cache)
     outcome["sources"] = sorted({r.source for r in results})
     return outcome
 

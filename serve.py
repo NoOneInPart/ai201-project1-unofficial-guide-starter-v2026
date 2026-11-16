@@ -158,8 +158,9 @@ def ask():
         )
 
     tokens_before = generate.token_counts()
+    use_cache = bool(payload.get("cache", True))
     try:
-        outcome = ask_pipeline(question, corpus=config.CORPUS)
+        outcome = ask_pipeline(question, corpus=config.CORPUS, cache=use_cache)
     except Exception as exc:  # noqa: BLE001 — a reader gets this, not a traceback
         duration_ms = (time.perf_counter() - start_time) * 1000
         audit.log_rejection(

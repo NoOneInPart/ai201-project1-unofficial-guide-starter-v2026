@@ -17,6 +17,11 @@
 
 ---
 
+<details>
+<summary><b>Previous Units Archive (Units 1 &amp; 2) — Click to expand</b></summary>
+
+<br>
+
 # Unit 1
 
 ## What This Does
@@ -453,6 +458,8 @@ chunker return complete thoughts, it must not return irrelevant information,
 such as chunks for header and title lines. I would probably think of a better 
 way to word it that is more measureable though.
 
+</details>
+
 ---
 
 # Extension: Deploy and Instrument
@@ -463,3 +470,82 @@ way to word it that is more measureable though.
 - **What's New:** Wrapped and deployed as an independent HTTP service (`serve.py`) with a dedicated run path, full structured JSON logging (capturing timestamps, inputs, outputs, status codes, and execution duration in milliseconds), runtime token and cost instrumentation, and service/index health checks (`/health`).
 - **Declared Shape:** **Shape A — Deploy and instrument** (operating via **Path B — local with logs**).
 - **Out of Scope:** Building a graphical user interface (web UI / frontend) and implementing advanced failure-hardening mechanisms (such as automated retry loops, rate-limit backoff queues, and network circuit breakers) are explicitly out of scope. The service communicates purely over HTTP JSON APIs, and runtime management uses standard server process execution.
+
+---
+
+## What It Costs
+
+### Measured Cost per Run
+
+- **Average API Spend per Run:** \$0.000056 USD
+- **Average Compute Duration:** 0.830 seconds (830.2 ms)
+- **Average Tokens Consumed:** 558.8 tokens total (494.0 prompt tokens in, 64.8 candidate tokens out)
+
+### Measurement Methodology
+
+Rather than estimating hypothetical costs from documentation, cost was measured directly across 10 uncached production requests (`cache=False`) evaluated on November 15, 2026.
+
+1. **Token Measurement:** The system reads real token counts directly from the Gemini API response metadata (`response.usage_metadata.prompt_token_count` and `candidates_token_count`) for each individual invocation. The exact token count varies by prompt and retrieval context (e.g. 469–541 prompt tokens depending on chunk lengths, and 50–98 candidate tokens depending on answer complexity).
+2. **Compute Duration:** Measured using monotonic wall-clock timing (`time.perf_counter()`), measuring total request latency including embedding search, relevance gating, and model generation.
+3. **API Pricing Formula:** Pricing as of November 2026 for `gemini-3.5-flash-lite`:
+   - Input: \$0.075 / 1,000,000 prompt tokens (\$0.000000075 / token)
+   - Output: \$0.30 / 1,000,000 output tokens (\$0.00000030 / token)
+   $$\text{Cost} = \frac{(\text{prompt\_tokens} \times 0.075) + (\text{output\_tokens} \times 0.30)}{1{,}000{,}000}$$
+4. **Gate Refusal Efficiency:** Out-of-corpus queries stopped by the relevance gate bypass generation entirely, consuming 0 API tokens and costing exactly \$0.00 USD.
+
+#### 10-Run Measurement Data
+
+| Run | Question | Latency (s) | Prompt Tokens | Output Tokens | Total Tokens | Cost (USD) |
+|---|---|---|---|---|---|---|
+| 1 | How do grade appeals work? | 2.214 | 490 | 53 | 543 | \$0.000053 |
+| 2 | What's the difference between withdrawal and dropping? | 0.879 | 469 | 95 | 564 | \$0.000064 |
+| 3 | What is the workload for CS 210? | 0.728 | 541 | 66 | 607 | \$0.000060 |
+| 4 | What's the dining atrium like? | 0.735 | 489 | 61 | 550 | \$0.000055 |
+| 5 | Where do I get textbooks? | 0.567 | 481 | 53 | 534 | \$0.000052 |
+| 6 | How do grade appeals work? | 0.540 | 490 | 50 | 540 | \$0.000052 |
+| 7 | What's the difference between withdrawal and dropping? | 0.836 | 469 | 98 | 567 | \$0.000065 |
+| 8 | What is the workload for CS 210? | 0.547 | 541 | 56 | 597 | \$0.000057 |
+| 9 | What's the dining atrium like? | 0.631 | 489 | 61 | 550 | \$0.000055 |
+| 10 | Where do I get textbooks? | 0.625 | 481 | 55 | 536 | \$0.000053 |
+| **Avg** | — | **0.830 s** | **494.0** | **64.8** | **558.8** | **\$0.000056** |
+
+---
+
+## Instrumentation
+
+Every request handled by the service emits a structured JSON line record to `logs/audit.jsonl` with timestamps, request inputs, outputs, status codes, execution duration in milliseconds, token counts, and USD cost.
+
+### Ten Real Log Entries (Pasted as Text)
+
+```json
+{"timestamp": "2026-11-16T03:12:43.053824+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 2213.99, "input": {"question": "How do grade appeals work?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.251200795173645, "threshold": 0.6, "sources": ["admin_grade_appeals.txt", "admin_housing_lottery.txt", "course_engl_205_exams.txt", "course_stat_150.txt", "course_stat_150_exams.txt"], "answer_length": 244, "answer_preview": "A grade appeal must start with the instructor and be raised within fifteen days of the grade posting, before it can go t..."}, "tokens": {"prompt_tokens": 490, "output_tokens": 53, "total_tokens": 543}, "cost_usd": 5.265e-05}
+{"timestamp": "2026-11-16T03:12:44.438577+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 878.85, "input": {"question": "What's the difference between withdrawal and dropping?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.36201179027557373, "threshold": 0.6, "sources": ["admin_add_drop_deadline.txt", "admin_dining_dollars.txt", "admin_grade_appeals.txt", "admin_meal_plan_changes.txt", "admin_withdrawal_deadline.txt"], "answer_length": 436, "answer_preview": "Based on the provided documents, dropping ends at week six (with drops after week two showing as a W on the transcript),..."}, "tokens": {"prompt_tokens": 469, "output_tokens": 95, "total_tokens": 564}, "cost_usd": 6.368e-05}
+{"timestamp": "2026-11-16T03:12:45.669285+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 728.07, "input": {"question": "What is the workload for CS 210?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.32016611099243164, "threshold": 0.6, "sources": ["course_cs_210_workload.txt", "course_cs_340_workload.txt", "course_engl_205_workload.txt", "course_phys_130_workload.txt", "course_stat_150_workload.txt"], "answer_length": 235, "answer_preview": "The workload for CS 210 Data Structures is 8 to 10 hours a week outside class, which is real time and not optimistic tim..."}, "tokens": {"prompt_tokens": 541, "output_tokens": 66, "total_tokens": 607}, "cost_usd": 6.037e-05}
+{"timestamp": "2026-11-16T03:12:46.909025+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 735.08, "input": {"question": "What's the dining atrium like?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.49060418407270423, "threshold": 0.6, "sources": ["dining_the_atrium_followup.txt", "housing_aldridge_hall.txt", "housing_calder_annexe.txt", "housing_fenwick_court.txt", "housing_tamsin_court.txt"], "answer_length": 215, "answer_preview": "Based on the provided documents, The Atrium has no queue if you go before 11:45 between classes, but it gets picked clea..."}, "tokens": {"prompt_tokens": 489, "output_tokens": 61, "total_tokens": 550}, "cost_usd": 5.497e-05}
+{"timestamp": "2026-11-16T03:12:47.982505+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 566.71, "input": {"question": "Where do I get textbooks?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.35194236533925927, "threshold": 0.6, "sources": ["admin_library_holds.txt", "money_textbooks.txt", "study_group_rooms.txt", "study_library_hours.txt"], "answer_length": 228, "answer_preview": "You can get textbooks without paying full price by using the library's two-hour reserve copy for reading-light courses, ..."}, "tokens": {"prompt_tokens": 481, "output_tokens": 53, "total_tokens": 534}, "cost_usd": 5.197e-05}
+{"timestamp": "2026-11-16T03:12:49.026940+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 540.47, "input": {"question": "How do grade appeals work?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.251200795173645, "threshold": 0.6, "sources": ["admin_grade_appeals.txt", "admin_housing_lottery.txt", "course_engl_205_exams.txt", "course_stat_150.txt", "course_stat_150_exams.txt"], "answer_length": 241, "answer_preview": "A grade appeal must start with the instructor and be raised within fifteen days of the grade posting before it can go to..."}, "tokens": {"prompt_tokens": 490, "output_tokens": 50, "total_tokens": 540}, "cost_usd": 5.175e-05}
+{"timestamp": "2026-11-16T03:12:50.365615+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 835.84, "input": {"question": "What's the difference between withdrawal and dropping?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.36201179027557373, "threshold": 0.6, "sources": ["admin_add_drop_deadline.txt", "admin_dining_dollars.txt", "admin_grade_appeals.txt", "admin_meal_plan_changes.txt", "admin_withdrawal_deadline.txt"], "answer_length": 428, "answer_preview": "Dropping ends at week six and requires no adviser signature, whereas withdrawal runs to week ten and requires an adviser..."}, "tokens": {"prompt_tokens": 469, "output_tokens": 98, "total_tokens": 567}, "cost_usd": 6.457e-05}
+{"timestamp": "2026-11-16T03:12:51.416395+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 547.16, "input": {"question": "What is the workload for CS 210?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.32016611099243164, "threshold": 0.6, "sources": ["course_cs_210_workload.txt", "course_cs_340_workload.txt", "course_engl_205_workload.txt", "course_phys_130_workload.txt", "course_stat_150_workload.txt"], "answer_length": 191, "answer_preview": "The workload for CS 210 Data Structures is 8 to 10 hours a week outside of class, and it is front-loaded with the first ..."}, "tokens": {"prompt_tokens": 541, "output_tokens": 56, "total_tokens": 597}, "cost_usd": 5.737e-05}
+{"timestamp": "2026-11-16T03:12:52.548153+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 630.52, "input": {"question": "What's the dining atrium like?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.49060418407270423, "threshold": 0.6, "sources": ["dining_the_atrium_followup.txt", "housing_aldridge_hall.txt", "housing_calder_annexe.txt", "housing_fenwick_court.txt", "housing_tamsin_court.txt"], "answer_length": 219, "answer_preview": "Based on the provided documents, there is no queue if you go before 11:45 between classes, but the food is picked clean ..."}, "tokens": {"prompt_tokens": 489, "output_tokens": 61, "total_tokens": 550}, "cost_usd": 5.497e-05}
+{"timestamp": "2026-11-16T03:12:53.678668+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 625.2, "input": {"question": "Where do I get textbooks?", "corpus": "campus_life"}, "output": {"refused": false, "best_distance": 0.35194236533925927, "threshold": 0.6, "sources": ["admin_library_holds.txt", "money_textbooks.txt", "study_group_rooms.txt", "study_library_hours.txt"], "answer_length": 242, "answer_preview": "You can get textbooks from the library (which holds one copy of most required texts on two-hour reserve) or from the cam..."}, "tokens": {"prompt_tokens": 481, "output_tokens": 55, "total_tokens": 536}, "cost_usd": 5.257e-05}
+```
+
+### Failed and Refused Runs (Pasted as Text)
+
+Alongside successful requests, failed inputs and gate refusals are explicitly captured in the audit ledger:
+
+**1. Out-of-Scope Gate Refusal (refused before calling generation model):**
+```json
+{"timestamp": "2026-11-16T03:12:54.238113+00:00", "endpoint": "/ask", "status_code": 200, "duration_ms": 55.18, "input": {"question": "What is the capital of Mongolia?", "corpus": "campus_life"}, "output": {"refused": true, "best_distance": 0.8245933055877686, "threshold": 0.6, "sources": [], "answer_length": 43, "answer_preview": "I don't have enough information about that."}, "tokens": {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "cost_usd": 0.0}
+```
+
+**2. Rejected Input — Empty Question (HTTP 400 Bad Request):**
+```json
+{"timestamp": "2026-11-16T03:12:54.239105+00:00", "endpoint": "/ask", "status_code": 400, "duration_ms": 0.05, "input": {"question": "   "}, "output": {"error": "bad_request", "reason": "Field 'question' must be a non-empty string."}, "tokens": {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "cost_usd": 0.0}
+```
+
+**3. Rejected Input — Non-Dictionary JSON Payload (HTTP 400 Bad Request):**
+```json
+{"timestamp": "2026-11-16T03:12:54.239901+00:00", "endpoint": "/ask", "status_code": 400, "duration_ms": 0.03, "input": ["invalid", "payload"], "output": {"error": "bad_request", "reason": "Expected a JSON object."}, "tokens": {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "cost_usd": 0.0}
+```
+
