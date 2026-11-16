@@ -78,6 +78,8 @@ CACHE_DIR = ROOT / ".cache"
 CORPORA_DIR = ROOT / "corpora"
 CHROMA_DIR = ROOT / "chroma_db"
 RESULTS_DIR = ROOT / "results"
+LOG_DIR = ROOT / "logs"
+AUDIT_LOG = LOG_DIR / "audit.jsonl"
 
 
 def corpus_path(name: str | None = None) -> Path:

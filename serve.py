@@ -45,6 +45,7 @@ def health():
     - Exposes operational configuration (corpus, chunk count, model, gate threshold).
     - Returns HTTP 200 when ready, HTTP 503 when the index is missing.
     """
+    import audit
     from store import index_exists, _client
 
     ready = index_exists(config.CORPUS)
@@ -67,6 +68,7 @@ def health():
         "embedding_model": config.EMBEDDING_MODEL,
         "threshold": config.THRESHOLD,
         "top_k": config.TOP_K,
+        "log_entries": len(audit.read_entries()),
         "detail": (
             "ready"
             if ready
@@ -156,6 +158,19 @@ def ask():
     )
 
 
+@app.get("/log")
+def get_log():
+    """Recent structured audit log entries, oldest first.
+
+        curl "http://localhost:5000/log?limit=10"
+    """
+    import audit
+
+    limit = request.args.get("limit", type=int)
+    entries = audit.read_entries(limit=limit)
+    return jsonify({"count": len(entries), "entries": entries}), 200
+
+
 def main():
     # Hosts tell you which port to listen on through PORT, and they expect you
     # on 0.0.0.0. Binding 127.0.0.1 instead works perfectly on your laptop and
@@ -174,6 +189,7 @@ def main():
     print(f"Corpus: {config.CORPUS}    (Ctrl-C to stop)\n")
     print("Try it from another terminal:\n")
     print(f"  curl http://localhost:{port}/health")
+    print(f"  curl http://localhost:{port}/log?limit=10")
     print(
         f"  curl -X POST http://localhost:{port}/ask \\\n"
         f"    -H 'Content-Type: application/json' \\\n"
