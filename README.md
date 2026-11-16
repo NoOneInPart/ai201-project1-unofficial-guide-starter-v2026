@@ -549,3 +549,84 @@ Alongside successful requests, failed inputs and gate refusals are explicitly ca
 {"timestamp": "2026-11-16T03:12:54.239901+00:00", "endpoint": "/ask", "status_code": 400, "duration_ms": 0.03, "input": ["invalid", "payload"], "output": {"error": "bad_request", "reason": "Expected a JSON object."}, "tokens": {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "cost_usd": 0.0}
 ```
 
+---
+
+## Run Log — Before
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Structured Log Schema Completeness | 100% | 13 of 13 | 13 of 13 | 13 of 13 | MET |
+| 2. Health & Readiness Probe Latency | 1 of 1 (<100ms) | 0 of 1 | 1 of 1 | 1 of 1 | MISSED |
+| 3. Bad-Path Rejection & Audit Trace | 2 of 2 (<10ms) | 2 of 2 | 2 of 2 | 2 of 2 | MET |
+| 4. Gate Refusal Short-Circuit & Zero Spend | 4 of 5 (0 cost) | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 5. Token & Latency Instrumentation | 5 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+
+### Real Output by Criterion (Before)
+
+#### 1. Structured Log Schema Completeness
+- **Produced by:** `audit.py::log_ask_request` via `serve.py::ask`
+- **Result:** 13 of 13 requests across all three trials contained all 7 required schema keys (`timestamp`, `endpoint`, `status_code`, `duration_ms`, `input`, `output`, `tokens`).
+- **Real log entry example (from Run 1):**
+  ```json
+  {"timestamp": "2026-11-16T03:28:51.308520+00:00", "endpoint": "/health", "status_code": 200, "duration_ms": 965.42, "input": {}, "output": {"ok": true, "status": "healthy", "service": "unofficial-guide", "corpus": "campus_life", "index_ready": true, "indexed_chunks": 183, "model": "gemini-3.5-flash-lite", "embedding_model": "all-MiniLM-L6-v2", "threshold": 0.6, "top_k": 5, "log_entries": 14, "detail": "ready"}, "tokens": {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "cost_usd": 0.0}
+  ```
+
+#### 2. Health & Readiness Probe Latency
+- **Produced by:** `serve.py::health`
+- **Result:** Missed in Run 1 (`965.42 ms`), passed in Run 2 (`2.81 ms`) and Run 3 (`2.14 ms`). Overall **MISSED** against target of `< 100 ms` on every run.
+- **Real response (Run 1):**
+  ```json
+  {"corpus": "campus_life", "detail": "ready", "embedding_model": "all-MiniLM-L6-v2", "index_ready": true, "indexed_chunks": 183, "log_entries": 14, "model": "gemini-3.5-flash-lite", "ok": true, "service": "unofficial-guide", "status": "healthy", "threshold": 0.6, "top_k": 5}
+  ```
+
+#### 3. Bad-Path Rejection & Audit Trace
+- **Produced by:** `serve.py::ask` & `audit.py::log_rejection`
+- **Result:** 2 of 2 invalid inputs rejected with HTTP 400 Bad Request in < 10 ms across all three runs.
+- **Real output examples (Run 1):**
+  - Payload: `{"question": "   "}` -> HTTP `400 Bad Request`, error: `"bad_request"`, latency: `0.05 ms`
+  - Payload: `["non", "dict", "payload"]` -> HTTP `400 Bad Request`, error: `"bad_request"`, latency: `0.04 ms`
+
+#### 4. Gate Refusal Short-Circuit & Zero Spend
+- **Produced by:** `gate.py::check` via `serve.py::ask`
+- **Result:** 5 of 5 out-of-scope questions refused by relevance gate with 0 tokens and \$0.00 cost across all three runs (**MET** against target of at least 4 of 5).
+- **Real output table (Run 1):**
+
+| Out-of-Scope Question | Best Distance | Refused | Total Tokens | Cost (USD) |
+|---|---|---|---|---|
+| What is the capital of Mongolia? | 0.8246 | True | 0 | \$0.000000 |
+| How do I change the oil in a diesel engine? | 0.9340 | True | 0 | \$0.000000 |
+| Who won the 1994 World Cup? | 0.8859 | True | 0 | \$0.000000 |
+| What is the recommended dosage of ibuprofen for a headache? | 0.7985 | True | 0 | \$0.000000 |
+| How do I write a for loop in Rust? | 0.8907 | True | 0 | \$0.000000 |
+
+#### 5. Token & Latency Instrumentation for Answered Queries
+- **Produced by:** `generate.py::generate` & `audit.py::log_ask_request`
+- **Result:** 5 of 5 answered in-corpus questions had positive measured duration, positive prompt and output tokens, and positive cost across all three runs (**MET**).
+- **Real output example (Question 1, Run 1):**
+  - **Question:** How do grade appeals work?
+  - **Latency:** `2082.85 ms`
+  - **Tokens:** `prompt_tokens: 490`, `output_tokens: 51`, `total_tokens: 541`
+  - **Cost:** `\$0.000052`
+  - **Answer Preview:** A grade appeal must begin with the instructor and be raised within fifteen days of the grade posting...
+
+---
+
+## Verdicts
+
+| # | Criterion | Verdict | How I decided |
+|---|---|---|---|
+| 1 | Structured Log Schema Completeness | MET | Every request across all 3 trials (13 of 13 per run) emitted a log record with all 7 required schema keys. |
+| 2 | Health & Readiness Probe Latency | MISSED | Run 1 took 965.42 ms, exceeding the 100 ms target, even though Runs 2 and 3 took < 3 ms. The target requires all runs to pass. |
+| 3 | Bad-Path Rejection & Audit Trace | MET | All malformed payloads across all 3 runs returned HTTP 400 with audit traces in under 0.1 ms (well below 10 ms). |
+| 4 | Gate Refusal Short-Circuit & Zero Spend | MET | All 5 out-of-scope questions were refused with 0 tokens and \$0.00 spend across all 3 runs, exceeding the 4 of 5 target. |
+| 5 | Token & Latency Instrumentation | MET | All 5 answered questions across all 3 runs recorded non-zero latency and verified positive prompt/output tokens. |
+
+---
+
+## Diagnoses
+
+Criterion 2 was missed on Run 1 (`965.42 ms` vs target `< 100 ms`). 
+
+**Mechanism:** In `serve.py::health`, the Chroma database client `_client()` was initialized lazily upon the very first request. During Run 1, calling `_client().get_collection(...)` forced Chroma to open its persistent SQLite database, establish connection pools, and run initial schema checks *inside* the timed `/health` request handler. Once initialized, subsequent health checks in Run 2 and Run 3 took under 3 ms. However, in production, an orchestrator (like Kubernetes) could mark the container unready if the initial probe exceeds its timeout.
+
+
