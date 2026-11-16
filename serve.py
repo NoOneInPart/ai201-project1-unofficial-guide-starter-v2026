@@ -73,15 +73,40 @@ def ask():
     """
     from app import ask_pipeline
 
-    payload = request.get_json(silent=True) or {}
-    question = (payload.get("question") or "").strip()
-
-    if not question:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
         return (
             jsonify(
                 {
-                    "error": "Send JSON with a question in it, like "
-                    '{"question": "is the housing lottery random?"}'
+                    "error": "bad_request",
+                    "message": "Expected a JSON object.",
+                }
+            ),
+            400,
+        )
+
+    question = payload.get("question")
+    if not isinstance(question, str) or not question.strip():
+        return (
+            jsonify(
+                {
+                    "error": "bad_request",
+                    "message": "Field 'question' must be a non-empty string, e.g. "
+                    '{"question": "is the housing lottery random?"}',
+                }
+            ),
+            400,
+        )
+
+    question = question.strip()
+
+    # Guard against oversized questions
+    if len(question.split()) >= 1000:
+        return (
+            jsonify(
+                {
+                    "error": "bad_request",
+                    "message": "Question exceeds maximum allowed length (1,000 words).",
                 }
             ),
             400,
@@ -90,18 +115,30 @@ def ask():
     try:
         outcome = ask_pipeline(question, corpus=config.CORPUS)
     except Exception as exc:  # noqa: BLE001 — a reader gets this, not a traceback
-        return jsonify({"error": f"{type(exc).__name__}: {exc}"}), 500
+        return (
+            jsonify(
+                {
+                    "error": "internal_server_error",
+                    "message": f"{type(exc).__name__}: {exc}",
+                }
+            ),
+            500,
+        )
 
-    return jsonify(
-        {
-            "question": question,
-            "answer": outcome["answer"],
-            "refused": outcome["refused"],
-            "sources": outcome["sources"],
-            "best_distance": round(outcome["best_distance"], 4),
-            "threshold": outcome["threshold"],
-            "corpus": config.CORPUS,
-        }
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "question": question,
+                "answer": outcome["answer"],
+                "refused": outcome["refused"],
+                "sources": outcome["sources"],
+                "best_distance": round(outcome["best_distance"], 4),
+                "threshold": outcome["threshold"],
+                "corpus": config.CORPUS,
+            }
+        ),
+        200,
     )
 
 
