@@ -40,27 +40,41 @@ app = Flask(__name__)
 def health():
     """Is the service up, and is there an index to search?
 
-    Two different questions, and the second one is the one that bites. A
-    freshly deployed service answers this route happily while every /ask
-    returns "no index" — hosts give you no disk that survives a restart, so
-    the index has to be built as part of getting the service up. Checking
-    here means you find that out in one request instead of five.
+    Modeled after production health checks:
+    - Verifies vector index presence without loading heavy embedding weights.
+    - Exposes operational configuration (corpus, chunk count, model, gate threshold).
+    - Returns HTTP 200 when ready, HTTP 503 when the index is missing.
     """
-    from store import index_exists
+    from store import index_exists, _client
 
     ready = index_exists(config.CORPUS)
-    return jsonify(
-        {
-            "status": "ok",
-            "corpus": config.CORPUS,
-            "index_ready": ready,
-            "detail": (
-                "ready"
-                if ready
-                else "no index for this corpus — run `python app.py index`"
-            ),
-        }
-    )
+    chunk_count = 0
+    if ready:
+        try:
+            coll = _client().get_collection(config.collection_name(config.CORPUS))
+            chunk_count = coll.count()
+        except Exception:
+            chunk_count = 0
+
+    body = {
+        "ok": ready,
+        "status": "healthy" if ready else "degraded",
+        "service": "unofficial-guide",
+        "corpus": config.CORPUS,
+        "index_ready": ready,
+        "indexed_chunks": chunk_count,
+        "model": config.MODEL,
+        "embedding_model": config.EMBEDDING_MODEL,
+        "threshold": config.THRESHOLD,
+        "top_k": config.TOP_K,
+        "detail": (
+            "ready"
+            if ready
+            else "no index for this corpus — run `python app.py index`"
+        ),
+    }
+    status_code = 200 if ready else 503
+    return jsonify(body), status_code
 
 
 @app.post("/ask")
