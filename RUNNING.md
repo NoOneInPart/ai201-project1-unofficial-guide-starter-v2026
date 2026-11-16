@@ -1,3 +1,93 @@
+# Running The Unofficial Guide (Shape A — Path B: Local with Logs)
+
+This system runs as an HTTP service locally on your machine, backed by local Chroma vector storage and structured logging.
+
+---
+
+## 1. The Single Start Command
+
+Start the service with:
+
+```powershell
+python serve.py
+```
+
+*(On macOS / Linux: `python3 serve.py`)*
+
+The service binds to `http://0.0.0.0:5000` (configurable via `PORT` environment variable).
+
+### Testing the Service (from another terminal)
+
+**1. Health & Index Diagnostics:**
+```powershell
+curl http://localhost:5000/health
+```
+
+**2. Ask a Question (`/ask`):**
+```powershell
+curl -X POST http://localhost:5000/ask `
+  -H "Content-Type: application/json" `
+  -d '{"question": "How do grade appeals work?"}'
+```
+
+**3. Inspect Structured Audit Log (`/log`):**
+```powershell
+curl http://localhost:5000/log?limit=10
+```
+
+**4. Run Automated Service Verification Suite:**
+```powershell
+python eval_server.py
+```
+
+---
+
+## 2. What the Environment Needs
+
+- **Python Version:** Python 3.11, 3.12, or 3.13 (Python 3.13.x recommended; Python 3.14 is unsupported by pinned dependencies).
+- **Virtual Environment & Dependencies:** Pinned in `requirements.txt`.
+- **API Key:** `GEMINI_API_KEY` set in `.env` (copied from `.env.example`).
+- **Model Files and Size:**
+  - **Local Embedding Model:** `all-MiniLM-L6-v2` ONNX model (~80 MB), bundled by Chroma and downloaded on first index/query to `.cache/` from Chroma's CDN (`chroma-onnx-models.s3.amazonaws.com`). Runs 100% locally on CPU without external API charges.
+  - **Generation Model:** `gemini-3.5-flash-lite` (default, set in `config.py`), called via Google GenAI API only for grounded synthesis after the relevance gate passes.
+  - **Local Vector Store:** Chroma DB directory in `chroma_db/` (~1-2 MB on disk for the default `campus_life` corpus).
+
+---
+
+## 3. Clean Checkout Setup (Step-by-Step)
+
+From a fresh clone of this repository:
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env         # edit .env and paste your GEMINI_API_KEY
+python app.py index            # build vector database (downloads ~80MB ONNX embedder)
+python eval_server.py          # verify service layer passes all checks
+python serve.py                # start the service
+```
+
+**macOS / Linux:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env           # edit .env and paste your GEMINI_API_KEY
+python app.py index            # build vector database
+python eval_server.py          # verify service layer passes all checks
+python serve.py                # start the service
+```
+
+---
+
+---
+
+<!-- =========================================================================
+     ORIGINAL STARTER GUIDE & PREVIOUS ASSIGNMENT REFERENCE (UNITS 1 & 2)
+     =========================================================================
+
 # Running this project
 
 Everything about how the starter works and how to use it.
@@ -255,3 +345,5 @@ units.
 
 `results/` is deliberately **not** in `.gitignore`. Your run logs are evidence
 that the test actually happened, and they're part of what gets graded.
+
+-->

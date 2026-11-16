@@ -21,9 +21,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any
-
-import requests
 
 
 class ClientAdapter:
@@ -40,21 +41,37 @@ class ClientAdapter:
 
     def get(self, path: str, params: dict | None = None) -> tuple[int, dict[str, Any]]:
         if self.base_url:
-            resp = requests.get(f"{self.base_url}{path}", params=params, timeout=10)
-            return resp.status_code, resp.json()
+            query = f"?{urllib.parse.urlencode(params)}" if params else ""
+            req = urllib.request.Request(f"{self.base_url}{path}{query}", method="GET")
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return resp.status, json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as err:
+                try:
+                    return err.code, json.loads(err.read().decode("utf-8"))
+                except Exception:
+                    return err.code, {}
         else:
             resp = self._test_client.get(path, query_string=params)
             return resp.status_code, resp.get_json(silent=True) or {}
 
     def post_json(self, path: str, data: Any) -> tuple[int, dict[str, Any]]:
         if self.base_url:
-            resp = requests.post(
+            payload = json.dumps(data).encode("utf-8")
+            req = urllib.request.Request(
                 f"{self.base_url}{path}",
-                json=data,
+                data=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=30,
+                method="POST",
             )
-            return resp.status_code, resp.json()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return resp.status, json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as err:
+                try:
+                    return err.code, json.loads(err.read().decode("utf-8"))
+                except Exception:
+                    return err.code, {}
         else:
             resp = self._test_client.post(
                 path,
@@ -116,14 +133,17 @@ def run_checks(client: ClientAdapter) -> bool:
             and data.get("refused") is False
             and bool(data.get("answer"))
             and len(data.get("sources", [])) > 0
+            and "duration_ms" in data
+            and "tokens" in data
+            and "cost_usd" in data
         )
         check(
-            "POST /ask answers in-corpus question",
+            "POST /ask answers in-corpus question with metrics",
             passed,
-            f"status={status}, best_distance={data.get('best_distance')}, sources={data.get('sources')}",
+            f"status={status}, duration_ms={data.get('duration_ms')}, tokens={data.get('tokens')}, cost=${data.get('cost_usd')}",
         )
     except Exception as exc:
-        check("POST /ask answers in-corpus question", False, str(exc))
+        check("POST /ask answers in-corpus question with metrics", False, str(exc))
 
     # 4. Out-of-scope question gate refusal
     try:

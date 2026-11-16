@@ -28,6 +28,7 @@ this file stays the bare shell until then.
 """
 
 import os
+import time
 
 from flask import Flask, jsonify, request
 
@@ -44,7 +45,9 @@ def health():
     - Verifies vector index presence without loading heavy embedding weights.
     - Exposes operational configuration (corpus, chunk count, model, gate threshold).
     - Returns HTTP 200 when ready, HTTP 503 when the index is missing.
+    - Records request duration and logs audit entry.
     """
+    start_time = time.perf_counter()
     import audit
     from store import index_exists, _client
 
@@ -76,6 +79,8 @@ def health():
         ),
     }
     status_code = 200 if ready else 503
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    audit.log_health(health_data=body, duration_ms=duration_ms, status_code=status_code)
     return jsonify(body), status_code
 
 
@@ -87,10 +92,20 @@ def ask():
     system working — it is an answer, and the JSON says so with
     `"refused": true` so whatever calls this can tell the two apart.
     """
+    start_time = time.perf_counter()
+    import audit
+    import generate
     from app import ask_pipeline
 
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        audit.log_rejection(
+            input_payload=payload,
+            reason="Expected a JSON object.",
+            duration_ms=duration_ms,
+            status_code=400,
+        )
         return (
             jsonify(
                 {
@@ -103,6 +118,13 @@ def ask():
 
     question = payload.get("question")
     if not isinstance(question, str) or not question.strip():
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        audit.log_rejection(
+            input_payload=payload,
+            reason="Field 'question' must be a non-empty string.",
+            duration_ms=duration_ms,
+            status_code=400,
+        )
         return (
             jsonify(
                 {
@@ -118,6 +140,13 @@ def ask():
 
     # Guard against oversized questions
     if len(question.split()) >= 1000:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        audit.log_rejection(
+            input_payload=payload,
+            reason="Question exceeds maximum allowed length (1,000 words).",
+            duration_ms=duration_ms,
+            status_code=400,
+        )
         return (
             jsonify(
                 {
@@ -128,9 +157,17 @@ def ask():
             400,
         )
 
+    tokens_before = generate.token_counts()
     try:
         outcome = ask_pipeline(question, corpus=config.CORPUS)
     except Exception as exc:  # noqa: BLE001 — a reader gets this, not a traceback
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        audit.log_rejection(
+            input_payload=payload,
+            reason=f"{type(exc).__name__}: {exc}",
+            duration_ms=duration_ms,
+            status_code=500,
+        )
         return (
             jsonify(
                 {
@@ -140,6 +177,21 @@ def ask():
             ),
             500,
         )
+
+    tokens_after = generate.token_counts()
+    prompt_tokens = max(0, tokens_after["prompt"] - tokens_before["prompt"])
+    output_tokens = max(0, tokens_after["output"] - tokens_before["output"])
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    cost_usd = audit.calculate_cost(prompt_tokens, output_tokens)
+
+    audit.log_ask_request(
+        question=question,
+        outcome=outcome,
+        duration_ms=duration_ms,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        status_code=200,
+    )
 
     return (
         jsonify(
@@ -152,6 +204,13 @@ def ask():
                 "best_distance": round(outcome["best_distance"], 4),
                 "threshold": outcome["threshold"],
                 "corpus": config.CORPUS,
+                "duration_ms": round(duration_ms, 2),
+                "tokens": {
+                    "prompt_tokens": prompt_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": prompt_tokens + output_tokens,
+                },
+                "cost_usd": cost_usd,
             }
         ),
         200,
