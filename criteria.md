@@ -182,3 +182,57 @@ that are available in the corpus as well.
      The whole reason the originals stay visible is so someone can see what you
      said before you knew the answer.
      ───────────────────────────────────────────────────────────────────────── -->
+
+
+---
+
+# Extension Acceptance Criteria (Shape A: Deploy & Instrument)
+
+Written in the Extension Unit **before** evaluation trials were conducted.
+
+At least three criteria directly evaluate the new operational service layer (HTTP API, structured JSON logging, latency measurement, and token/cost instrumentation), with explicit coverage of the failure/bad-request path.
+
+---
+
+## 1. Structured Log Schema Completeness (Extension)
+
+Every incoming HTTP request handled by the service (across `/ask`, `/health`, and rejected calls) writes a single JSON record to `logs/audit.jsonl` containing all seven required top-level keys: `timestamp`, `endpoint`, `status_code`, `duration_ms`, `input`, `output`, and `tokens`.
+
+- **Target:** 100% of requests (15 of 15 across 3 evaluation runs) write a valid JSON entry with all 7 keys present.
+- **Why this target:** In an operational deployment, any request that fails to log creates an unmonitored blind spot where errors or runaway API spend go undetected. Because schema construction happens deterministically in the server's response wrapper before returning to the client, 100% compliance is achievable and necessary. A looser target (e.g. 90%) would mean tolerating silent data loss in production audit trails.
+
+---
+
+## 2. Health & Readiness Probe Latency (Extension)
+
+`GET /health` returns HTTP status code 200 with `"ok": true`, `"index_ready": true`, and an `indexed_chunks` integer count greater than 0, completing in under 100 milliseconds without calling the LLM.
+
+- **Target:** 3 of 3 evaluation trials return HTTP 200 with `duration_ms < 100` and `indexed_chunks > 0`.
+- **Why this target:** Container platforms and cloud load balancers probe health endpoints every few seconds. If `/health` exceeds 100 ms or inadvertently triggers embedding model downloads or LLM synthesis, it burns system memory and API quota simply checking if the container is alive. 100 ms guarantees the health check only queries Chroma's SQLite metadata table for index presence rather than executing deep neural inference.
+
+---
+
+## 3. Bad-Path Rejection & Audit Trace (Extension — Failure Path)
+
+When sent malformed or invalid inputs (specifically an empty query `{"question": "   "}` and a non-dictionary JSON payload `["invalid"]`), `POST /ask` immediately rejects the request with HTTP status code 400 Bad Request, refuses to execute retrieval or generation, and writes an audit log entry with `"error": "bad_request"` in under 10 milliseconds.
+
+- **Target:** 6 of 6 invalid test queries (3 runs of 2 bad payloads) return HTTP 400 and log the rejection with `duration_ms < 10`.
+- **Why this target:** This is the bad path. Clients frequently send empty strings, mistyped keys, or non-object JSON payloads. If the service attempts retrieval or LLM generation on malformed input, it wastes API quota, risks 500 runtime crashes, and corrupts metrics. Enforcing a < 10 ms rejection verifies that input validation happens immediately at the routing boundary before vector search or LLM invocation.
+
+---
+
+## 4. Gate Refusal Short-Circuit & Zero Spend (Core + Extension)
+
+When an out-of-corpus question is submitted to `POST /ask` (using the 5 standard `OUT_OF_SCOPE` queries), the relevance gate refuses the question, returning HTTP 200 with `"refused": true`, logging `best_distance >= 0.6`, and consuming exactly 0 generation tokens and $0.00 USD API spend.
+
+- **Target:** At least 4 of 5 out-of-scope questions refused with `cost_usd == 0.0` across all 3 trials.
+- **Why this target:** Grounding integrity requires refusing questions unsupported by the corpus so the LLM does not hallucinate. The operational requirement is that a refusal must cleanly short-circuit the pipeline: it must record the query and its distance for observability, but consume zero model generation tokens. Allowing 1 miss out of 5 accounts for edge cases where an out-of-corpus query might accidentally align closely with corpus terminology, while still strictly enforcing zero financial cost on all refused queries.
+
+---
+
+## 5. Token & Latency Instrumentation for Answered Queries (Extension)
+
+For every successfully answered question through `POST /ask`, the response payload and corresponding audit log entry include measured end-to-end latency (`duration_ms > 0`), measured API token counts (`prompt_tokens > 0` and `output_tokens > 0`), and calculated cost in USD.
+
+- **Target:** 5 of 5 in-corpus test questions across all 3 trials report non-zero duration, positive prompt and output token counts, and cost.
+- **Why this target:** Operational observability requires tracking how much each answered question costs and how long it takes. Since generation calls Gemini, a non-zero token count verifies that token usage was captured from real API metadata rather than defaulting to null or zero. Missing these fields means operators cannot budget or bill for API usage.
