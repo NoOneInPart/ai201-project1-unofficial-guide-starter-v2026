@@ -452,3 +452,14 @@ I would probably rewrite criteria 4 to be even more specific. Not only must the
 chunker return complete thoughts, it must not return irrelevant information, 
 such as chunks for header and title lines. I would probably think of a better 
 way to word it that is more measureable though.
+
+---
+
+# Extension: Deploy and Instrument
+
+## System, Shape, and Scope
+
+- **System Extended:** The Unofficial Guide (`campus_life` corpus) — originally a local CLI-only RAG pipeline (`app.py`).
+- **What's New:** Wrapped and deployed as an independent HTTP service (`serve.py`) with a dedicated run path, full structured JSON logging (capturing timestamps, inputs, outputs, status codes, and execution duration in milliseconds), runtime token and cost instrumentation, and service/index health checks (`/health`).
+- **Declared Shape:** **Shape A — Deploy and instrument** (operating via **Path B — local with logs**).
+- **Out of Scope:** Building a graphical user interface (web UI / frontend) and implementing advanced failure-hardening mechanisms (such as automated retry loops, rate-limit backoff queues, and network circuit breakers) are explicitly out of scope. The service communicates purely over HTTP JSON APIs, and runtime management uses standard server process execution.
