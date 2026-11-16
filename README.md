@@ -462,7 +462,7 @@ way to word it that is more measureable though.
 
 ---
 
-# Extension: Deploy and Instrument
+# Capstone Extension: Deploy and Instrument
 
 ## System, Shape, and Scope
 
@@ -628,5 +628,109 @@ Alongside successful requests, failed inputs and gate refusals are explicitly ca
 Criterion 2 was missed on Run 1 (`965.42 ms` vs target `< 100 ms`). 
 
 **Mechanism:** In `serve.py::health`, the Chroma database client `_client()` was initialized lazily upon the very first request. During Run 1, calling `_client().get_collection(...)` forced Chroma to open its persistent SQLite database, establish connection pools, and run initial schema checks *inside* the timed `/health` request handler. Once initialized, subsequent health checks in Run 2 and Run 3 took under 3 ms. However, in production, an orchestrator (like Kubernetes) could mark the container unready if the initial probe exceeds its timeout.
+
+---
+
+## The Improvement
+
+**What I changed:** Added a startup `warmup()` routine to `serve.py` that pre-connects the Chroma database client (`store._client()`) and queries the collection handle when the module initializes, before incoming traffic is accepted.
+
+**Why I picked it:** This directly fixes the diagnosed root cause of the Criterion 2 miss. Moving the one-time SQLite connection and metadata indexing initialization out of the timed `/health` request handler eliminates cold-start latency spikes for initial health probes.
+
+---
+
+### Run Log — After
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Structured Log Schema Completeness | 100% | 13 of 13 | 13 of 13 | 13 of 13 | MET |
+| 2. Health & Readiness Probe Latency | 1 of 1 (<100ms) | 1 of 1 | 1 of 1 | 1 of 1 | MET |
+| 3. Bad-Path Rejection & Audit Trace | 2 of 2 (<10ms) | 2 of 2 | 2 of 2 | 2 of 2 | MET |
+| 4. Gate Refusal Short-Circuit & Zero Spend | 4 of 5 (0 cost) | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+| 5. Token & Latency Instrumentation | 5 of 5 | 5 of 5 | 5 of 5 | 5 of 5 | MET |
+
+### Real Output by Criterion (After)
+
+#### 1. Structured Log Schema Completeness
+- **Produced by:** `audit.py::log_ask_request` via `serve.py::ask`
+- **Result:** 13 of 13 requests across all three trials contained all 7 required schema keys (`timestamp`, `endpoint`, `status_code`, `duration_ms`, `input`, `output`, `tokens`).
+- **Real log entry example:**
+  ```json
+  {"timestamp": "2026-11-16T03:35:45.449079+00:00", "endpoint": "/health", "status_code": 200, "duration_ms": 51.74, "input": {}, "output": {"ok": true, "status": "healthy", "service": "unofficial-guide", "corpus": "campus_life", "index_ready": true, "indexed_chunks": 183, "model": "gemini-3.5-flash-lite", "embedding_model": "all-MiniLM-L6-v2", "threshold": 0.6, "top_k": 5, "log_entries": 53, "detail": "ready"}, "tokens": {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "cost_usd": 0.0}
+  ```
+
+#### 2. Health & Readiness Probe Latency
+- **Produced by:** `serve.py::health`
+- **Result:** Run 1 latency dropped from `965.42 ms` down to `51.74 ms` (**MET** against `< 100 ms` target). Runs 2 and 3 remained fast at `2.31 ms` and `2.08 ms`.
+- **Real response:**
+  ```json
+  {"corpus": "campus_life", "detail": "ready", "embedding_model": "all-MiniLM-L6-v2", "index_ready": true, "indexed_chunks": 183, "log_entries": 53, "model": "gemini-3.5-flash-lite", "ok": true, "service": "unofficial-guide", "status": "healthy", "threshold": 0.6, "top_k": 5}
+  ```
+
+#### 3. Bad-Path Rejection & Audit Trace
+- **Produced by:** `serve.py::ask` validation & `audit.py::log_rejection`
+- **Result:** 2 of 2 invalid inputs rejected with HTTP 400 Bad Request in < 10 ms across all three runs (**MET**).
+- **Real rejection samples:**
+  - Payload: `{'question': '   '}` -> HTTP `400`, error: `"bad_request"`, latency: `0.06 ms`
+  - Payload: `['non', 'dict', 'payload']` -> HTTP `400`, error: `"bad_request"`, latency: `0.06 ms`
+
+#### 4. Gate Refusal Short-Circuit & Zero Spend
+- **Produced by:** `gate.py::check` via `serve.py::ask`
+- **Result:** 5 of 5 out-of-scope questions refused by relevance gate with 0 tokens and \$0.00 cost across all three runs (**MET** against target of at least 4 of 5).
+- **Real refusal samples table:**
+
+| Question | Best Distance | Refused | Total Tokens | Cost (USD) |
+|---|---|---|---|---|
+| What is the capital of Mongolia? | 0.8246 | True | 0 | \$0.000000 |
+| How do I change the oil in a diesel engine? | 0.9340 | True | 0 | \$0.000000 |
+| Who won the 1994 World Cup? | 0.8859 | True | 0 | \$0.000000 |
+| What is the recommended dosage of ibuprofen for a headache? | 0.7985 | True | 0 | \$0.000000 |
+| How do I write a for loop in Rust? | 0.8907 | True | 0 | \$0.000000 |
+
+#### 5. Token & Latency Instrumentation for Answered Queries
+- **Produced by:** `generate.py::generate` & `audit.py::log_ask_request`
+- **Result:** 5 of 5 answered in-corpus questions had positive measured duration, positive prompt/output tokens, and positive cost across all three runs (**MET**).
+- **Real answered query sample (Question 1):**
+  - **Question:** How do grade appeals work?
+  - **Latency:** `1921.92 ms`
+  - **Tokens:** `{'output_tokens': 49, 'prompt_tokens': 490, 'total_tokens': 539}`
+  - **Cost:** `\$0.000051`
+  - **Answer Preview:** A grade appeal must start with the instructor and be raised within fifteen days of the grade posting...
+
+---
+
+## Did It Help?
+
+Yes. Pre-warming the vector database client on startup reduced the initial Run 1 health check latency from `965.42 ms` to `51.74 ms` (an 18x speedup), bringing it well under the 100 ms threshold and turning Criterion 2 from **MISSED** into **MET**. Runs 2 and 3 remained consistently fast (< 3 ms), and all other criteria continued to pass without regressions.
+
+---
+
+## What's Still Broken
+
+The service currently meets all 5 acceptance criteria under single-threaded evaluation. However, the system relies on single-process Flask, meaning concurrent requests to `/ask` would block each other and could contend for the local SQLite database lock in Chroma DB during simultaneous reads. If scaling to higher traffic, adding a multi-worker WSGI server (such as Gunicorn or Waitress) with an externalized database connection pool would be the necessary operational upgrade. I stopped here because concurrent throughput scaling and distributed deployments were declared out of scope for the Path B local service specification.
+
+---
+
+## What I'd Do Differently
+
+Knowing that the warmup routine successfully brings health check latency down to ~50 ms on cold start and ~2 ms on warm calls, I would tighten Criterion 2's threshold from `< 100 ms` to `< 60 ms`. This stricter bound would guarantee that even worst-case cold probes meet strict orchestration SLA requirements without being masked by a lenient 100 ms ceiling.
+
+---
+
+## How I Used AI
+
+Two specific moments during this extension:
+
+**1. Automated Criteria Evaluation Suite (`run_eval_extension.py`)**
+- **What I asked for:** I asked Gemini to build a reproducible evaluation test suite that would run three independent trials testing all 5 criteria against the HTTP service, specifically requiring deliberate failure tests (malformed JSON payloads, empty question strings) alongside gate refusals, health checks, and in-corpus queries.
+- **What came back:** Gemini generated `run_eval_extension.py` using Flask's `test_client` and standard library modules (`urllib.request`), measuring exact status codes, execution latencies, and verifying log schema completeness while saving Markdown tables into `results/`.
+- **What I changed:** I didn't really have to change anything in the generated test script because it cleanly executed all 5 criteria across all 3 trials without requiring unpinned dependencies, accurately identified the cold-start health check latency miss on Run 1, and formatted the output tables ready for this report.
+
+**2. Cost and Token Instrumentation (`measure_cost.py` & `audit.py`)**
+- **What I asked for:** I asked Gemini to instrument per-query cost measurement across 10 real uncached requests by extracting token usage directly from API metadata rather than estimating from documentation.
+- **What came back:** Gemini created `measure_cost.py` and implemented `calculate_cost()` in `audit.py` using Gemini 3.5 Flash Lite pricing (\$0.075 / 1M prompt tokens, \$0.30 / 1M candidate tokens), arriving at an average cost of \$0.000056 per run.
+- **What I changed:** I added a note clarifying that the exact cost varies depending on the specific model pricing and prompt. Token consumption is prompt-dependent (varying based on the retrieved context length and synthesized answer length), and the dollar charge depends on provider rates as of today's date (November 15, 2026), rather than treating the calculated average as a fixed constant across different models or questions.
+
+
 
 

@@ -37,6 +37,25 @@ import config
 app = Flask(__name__)
 
 
+def warmup():
+    """Pre-warm vector database connection on startup.
+
+    Eliminates cold-start database connection and schema check latency
+    so that initial orchestrator health probes respond in milliseconds.
+    """
+    try:
+        from store import _client
+
+        coll_name = config.collection_name(config.CORPUS)
+        _client().get_collection(coll_name)
+    except Exception:
+        pass
+
+
+# Pre-warm on startup
+warmup()
+
+
 @app.get("/health")
 def health():
     """Is the service up, and is there an index to search?
