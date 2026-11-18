@@ -118,6 +118,25 @@ def ask():
 
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
+        raw_text = request.get_data(as_text=True).strip()
+        if raw_text:
+            import json, re
+
+            try:
+                parsed = json.loads(raw_text)
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except Exception:
+                # Handle Windows PowerShell stripping double quotes from JSON CLI args
+                m = re.match(
+                    r'^\{\s*["\']?question["\']?\s*:\s*["\']?(.*?)["\']?\s*\}$',
+                    raw_text,
+                    re.DOTALL,
+                )
+                if m:
+                    payload = {"question": m.group(1).strip('"\' ')}
+
+    if not isinstance(payload, dict):
         duration_ms = (time.perf_counter() - start_time) * 1000
         audit.log_rejection(
             input_payload=payload,

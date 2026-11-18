@@ -25,9 +25,12 @@ curl http://localhost:5000/health
 
 **2. Ask a Question (`/ask`):**
 ```powershell
-curl -X POST http://localhost:5000/ask `
+curl.exe -X POST http://localhost:5000/ask `
   -H "Content-Type: application/json" `
-  -d '{"question": "How do grade appeals work?"}'
+  -d '{\"question\": \"How do grade appeals work?\"}'
+
+# Or using PowerShell native cmdlet:
+Invoke-RestMethod -Uri http://localhost:5000/ask -Method Post -ContentType "application/json" -Body '{"question": "How do grade appeals work?"}'
 ```
 
 **3. Inspect Structured Audit Log (`/log`):**
